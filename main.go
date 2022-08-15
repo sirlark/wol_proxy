@@ -69,7 +69,9 @@ func processConn(upstream net.Conn) {
 			break
 		}
 	}
-	defer server.Close()
+	if err == nil {
+		defer downstream.Close()
+	}
 
 	fmt.Println("Connected socket to:", SERVER_ADDR)
 
