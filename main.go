@@ -2,24 +2,29 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log"
 	"io"
+	"os"
+	"flag"
 	"net"
 	"time"
 
 	"github.com/linde12/gowol"
 )
 
-const (
-	PROXY_ADDR      = "0.0.0.0:8123"
-	SERVER_ADDR     = "10.0.0.1:8096"
-	SERVER_MAC_ADDR = "aa:bb:cc:dd:ee:ff"
-)
+var upstreamAddr, downstreamAddr, downstreamMac string
 
 func main() {
-	fmt.Println("Hello sockets")
-
-	srv, err := net.Listen("tcp", PROXY_ADDR)
+	flag.StringVar(&upstreamAddr, "u", "127.0.0.1:6666", "The IP address and port to listen on")
+	flag.StringVar(&downstreamAddr, "d", "10.0.0.1:7777", "The IP address and port to forward to")
+	flag.StringVar(&downstreamMac, "m", "aa:bb:cc:dd:ee:ff", "The MAC address to wake up")
+	flag.Parse()
+	if flag.NArg() > 0 {
+		fmt.Println("All flags are mandatory and no other arguments are accepted")
+		flag.PrintDefaults()
+		os.Exit(2);
+	}
+	srv, err := net.Listen("tcp", upstreamAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -41,17 +46,17 @@ func copySocket(cancel context.CancelFunc, dst, src net.Conn) {
 	cancel()
 }
 
-func processConn(client net.Conn) {
-	defer client.Close()
+func processConn(upstream net.Conn) {
+	defer upstream.Close()
 
-	var server net.Conn
+	var downstream net.Conn
 	var err error
 	var try int
 	for {
-		server, err = net.Dial("tcp", SERVER_ADDR)
+		downstream, err = net.Dial("tcp", downstreamAddr)
 		if err != nil {
 			fmt.Println("Failed to connect to client")
-			if packet, err := gowol.NewMagicPacket(SERVER_MAC_ADDR); err == nil {
+			if packet, err := gowol.NewMagicPacket(downstreamMac); err == nil {
 				packet.Send("255.255.255.255") // send to broadcast
 			}
 			time.Sleep(70 * time.Second)
@@ -69,9 +74,8 @@ func processConn(client net.Conn) {
 	fmt.Println("Connected socket to:", SERVER_ADDR)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	// io.Copy(dst, src)
-	go copySocket(cancel, client, server)
-	go copySocket(cancel, server, client)
+	go copySocket(cancel, upstream, downstream)
+	go copySocket(cancel, downstream, upstream)
 
 	<-ctx.Done()
 
