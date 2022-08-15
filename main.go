@@ -61,10 +61,10 @@ func processConn(upstream net.Conn) {
 			if packet, err := gowol.NewMagicPacket(downstreamMac); err == nil {
 				packet.Send("255.255.255.255") // send to broadcast
 			}
-			time.Sleep(70 * time.Second)
+			time.Sleep(10 * time.Second)
 			try++
-			if try > 3 {
-				fmt.Println("Giving Up")
+			if try > 9 {
+				info.Println("Giving up last attempt to connect on behalf of", upstream.RemoteAddr())
 				return
 			}
 		} else {
